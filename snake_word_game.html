@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;min-height:100vh;padding:8px 4px 16px;user-select:none;transition:background 1s;overflow-x:hidden}
+h1{font-size:16px;font-weight:700;margin-bottom:4px;letter-spacing:1px}
+#info{display:flex;gap:14px;margin-bottom:3px;font-size:13px;flex-wrap:wrap;justify-content:center}
+#info span b{font-weight:700}
+
+/* hint box */
+#hint-box{display:flex;align-items:center;gap:8px;margin-bottom:5px;padding:5px 14px;border-radius:12px;border:2px solid;font-size:13px;font-weight:600;transition:all .4s}
+#hint-emoji{font-size:28px;line-height:1}
+#hint-text{display:flex;flex-direction:column;gap:1px}
+#hint-cat{font-size:10px;text-transform:uppercase;letter-spacing:1px;opacity:.7}
+#hint-word-label{font-size:12px}
+
+/* word display */
+#word-display{font-size:20px;letter-spacing:5px;margin-bottom:5px;min-height:32px;text-align:center}
+#word-display span{display:inline-block;width:28px;text-align:center;border-bottom:3px solid #ccc;color:#bbb;transition:all .25s;font-weight:700}
+#word-display span.collected{font-weight:900}
+#word-display span.next-hint{animation:pulse 0.8s infinite alternate}
+@keyframes pulse{from{transform:scale(1)}to{transform:scale(1.15)}}
+
+/* canvas wrap */
+.game-wrap{position:relative;width:min(400px,96vw)}
+canvas{border-radius:12px;display:block;width:100%}
+#bg-canvas{position:absolute;top:0;left:0;width:100%;height:100%;border-radius:12px;pointer-events:none}
+#game-canvas{position:relative;z-index:2;width:100%;height:auto}
+
+/* shake */
+@keyframes shake{0%{transform:translateX(0)}20%{transform:translateX(-6px)}40%{transform:translateX(6px)}60%{transform:translateX(-4px)}80%{transform:translateX(4px)}100%{transform:translateX(0)}}
+.shake{animation:shake .35s ease}
+
+/* celebrate overlay */
+#celebrate{position:absolute;top:0;left:0;width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:10;pointer-events:none;opacity:0;transition:opacity .3s;border-radius:12px}
+#celebrate.show{opacity:1}
+#emoji-big{font-size:0;transition:font-size .4s cubic-bezier(.175,.885,.32,1.275),transform .3s;transform:scale(0);line-height:1}
+#emoji-big.pop{font-size:72px;transform:scale(1)}
+#praise{font-size:22px;font-weight:900;margin-top:4px;opacity:0;transition:opacity .4s}
+#praise.show{opacity:1}
+#word-spoken{font-size:22px;font-weight:700;margin-top:4px;letter-spacing:4px;opacity:0;transition:opacity .4s}
+#word-spoken.show{opacity:1}
+#letter-highlight{font-size:30px;font-weight:900;min-height:36px}
+
+/* freeze flash */
+#freeze-flash{position:absolute;top:0;left:0;width:100%;height:100%;border-radius:12px;background:rgba(255,50,50,.0);pointer-events:none;z-index:9;transition:background .15s}
+#freeze-flash.active{background:rgba(255,50,50,.22)}
+
+#msg{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:17px;font-weight:600;text-align:center;pointer-events:none;padding:12px 20px;border-radius:12px;border:2px solid;white-space:pre-line;z-index:20;opacity:0;transition:opacity .3s}
+#msg.show{opacity:1}
+
+/* controls */
+#btn-row{margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+button{background:#fff;border:2px solid #ddd;color:#555;padding:5px 14px;border-radius:8px;cursor:pointer;font-size:13px;transition:all .2s;box-shadow:0 1px 4px rgba(0,0,0,.08);font-weight:600}
+button:hover{border-color:#888;color:#222}
+button:active{transform:scale(.95)}
+
+/* dpad */
+#dpad{display:grid;grid-template-columns:50px 50px 50px;grid-template-rows:50px 50px;gap:5px;margin-top:10px}
+#dpad button{width:50px;height:50px;font-size:22px;padding:0;border-radius:10px;display:flex;align-items:center;justify-content:center}
+#btn-up{grid-column:2;grid-row:1}
+#btn-left{grid-column:1;grid-row:2}
+#btn-down{grid-column:2;grid-row:2}
+#btn-right{grid-column:3;grid-row:2}
+
+/* leaderboard */
+#lb-panel{width:min(400px,96vw);margin-top:10px;border-radius:10px;overflow:hidden;border:2px solid #ddd}
+#lb-header{display:flex;align-items:center;justify-content:space-between;padding:7px 14px;font-size:13px;font-weight:700;cursor:pointer}
+#lb-body{display:none;padding:0 0 6px}
+#lb-body.open{display:block}
+#lb-list{list-style:none;padding:0 14px}
+#lb-list li{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid rgba(0,0,0,.06);font-size:13px}
+#lb-list li:last-child{border-bottom:none}
+.medal{font-size:16px;width:22px}
+.lb-name{flex:1;margin:0 8px;font-size:12px;color:#888}
+.lb-score{font-weight:700;min-width:40px;text-align:right}
+.lb-lvl{color:#aaa;font-size:11px;min-width:36px;text-align:right;margin-left:6px}
+#lb-clear{display:block;margin:4px 14px 0;font-size:11px;color:#aaa;text-align:right;cursor:pointer;background:none;border:none;box-shadow:none;padding:0;font-weight:400}
+#lb-clear:hover{color:#c00}
+#footer-hint{font-size:11px;color:#aaa;margin-top:6px;text-align:center}
+</style>
+</head>
+<body>
+<h1 id="title">🐍 Змійка-Читайка</h1>
+<div id="info">
+  <span>Рівень: <b id="lvl">1</b></span>
+  <span>Зірки: <b id="score">0</b> ⭐</span>
+  <span>Рекорд: <b id="best">0</b> ⭐</span>
+</div>
+
+<div id="hint-box">
+  <div id="hint-emoji">🎯</div>
+  <div id="hint-text">
+    <div id="hint-cat">категорія</div>
+    <div id="hint-word-label">Зберемо слово!</div>
+  </div>
+</div>
+
+<div id="word-display"></div>
+
+<div class="game-wrap" id="gwrap">
+  <canvas id="bg-canvas" width="400" height="400"></canvas>
+  <canvas id="game-canvas" width="400" height="400"></canvas>
+  <div id="freeze-flash"></div>
+  <div id="celebrate">
+    <div id="emoji-big"></div>
+    <div id="praise"></div>
+    <div id="word-spoken"></div>
+    <div id="letter-highlight"></div>
+  </div>
+  <div id="msg"></div>
+</div>
+
+<div id="btn-row">
+  <button onclick="startGame()">▶ Нова гра</button>
+  <button onclick="togglePause()">⏸ Пауза</button>
+</div>
+<div id="dpad">
+  <button id="btn-up"    ontouchstart="e2d(event,0,-1)" onmousedown="dpad(0,-1)">▲</button>
+  <button id="btn-left"  ontouchstart="e2d(event,-1,0)" onmousedown="dpad(-1,0)">◀</button>
+  <button id="btn-down"  ontouchstart="e2d(event,0,1)"  onmousedown="dpad(0,1)">▼</button>
+  <button id="btn-right" ontouchstart="e2d(event,1,0)"  onmousedown="dpad(1,0)">▶</button>
+</div>
+
+<div id="lb-panel">
+  <div id="lb-header" onclick="toggleLb()">🏆 Таблиця рекордів <span id="lb-arrow">▼</span></div>
+  <div id="lb-body">
+    <ul id="lb-list"></ul>
+    <button id="lb-clear" onclick="clearLb()">очистити</button>
+  </div>
+</div>
+<div id="footer-hint">Стрілки клавіатури або кнопки ▲◀▼▶</div>
+
+<script>
+const CELL=20,COLS=20,ROWS=20;
+const bgC=document.getElementById('bg-canvas'),bgX=bgC.getContext('2d');
+const canvas=document.getElementById('game-canvas'),ctx=canvas.getContext('2d');
+
+const THEMES={
+  'Овочі'  :{bg1:'#c8e6c9',bg2:'#a5d6a7',pe:['🌿','🍃','✿','·'],title:'#2e7d32',cat:'#388e3c',head:'#00c853',body:['#43a047','#2e7d32','#1b5e20'],lNB:'#43a047',lNT:'#1b5e20',lOB:'#c5e1a5',lOT:'#7cb342',wCol:'#1b5e20',msgBg:'rgba(232,245,233,.95)',msgBorder:'#43a047',msgText:'#1b5e20',hbBg:'#e8f5e9',hbBorder:'#43a047',hbText:'#1b5e20',tongue:'#c62828'},
+  'Фрукти' :{bg1:'#fce4ec',bg2:'#f8bbd0',pe:['✿','·','♡','˚'],title:'#880e4f',cat:'#c2185b',head:'#ff4081',body:['#c2185b','#880e4f','#560027'],lNB:'#e91e63',lNT:'#880e4f',lOB:'#f8bbd0',lOT:'#ec407a',wCol:'#880e4f',msgBg:'rgba(252,228,236,.95)',msgBorder:'#e91e63',msgText:'#880e4f',hbBg:'#fce4ec',hbBorder:'#e91e63',hbText:'#880e4f',tongue:'#b71c1c'},
+  'Тварини':{bg1:'#e3f2fd',bg2:'#bbdefb',pe:['·','˚','✦','∘'],title:'#0d47a1',cat:'#1565c0',head:'#2979ff',body:['#1565c0','#0d47a1','#002171'],lNB:'#1976d2',lNT:'#0d47a1',lOB:'#bbdefb',lOT:'#42a5f5',wCol:'#0d47a1',msgBg:'rgba(227,242,253,.95)',msgBorder:'#1976d2',msgText:'#0d47a1',hbBg:'#e3f2fd',hbBorder:'#1976d2',hbText:'#0d47a1',tongue:'#b71c1c'},
+  'Побут'  :{bg1:'#fff8e1',bg2:'#ffecb3',pe:['✦','·','★','˚'],title:'#e65100',cat:'#ef6c00',head:'#ffab00',body:['#f57c00','#e65100','#bf360c'],lNB:'#f57c00',lNT:'#e65100',lOB:'#ffe082',lOT:'#ffa726',wCol:'#e65100',msgBg:'rgba(255,248,225,.95)',msgBorder:'#f57c00',msgText:'#e65100',hbBg:'#fff8e1',hbBorder:'#f57c00',hbText:'#e65100',tongue:'#b71c1c'},
+  'Птахи'  :{bg1:'#f3e5f5',bg2:'#e1bee7',pe:['🪶','·','✦','˚'],title:'#4a148c',cat:'#7b1fa2',head:'#e040fb',body:['#7b1fa2','#4a148c','#2d0a6b'],lNB:'#ab47bc',lNT:'#4a148c',lOB:'#ce93d8',lOT:'#ab47bc',wCol:'#4a148c',msgBg:'rgba(243,229,245,.95)',msgBorder:'#ab47bc',msgText:'#4a148c',hbBg:'#f3e5f5',hbBorder:'#ab47bc',hbText:'#4a148c',tongue:'#b71c1c'},
+  'Природа':{bg1:'#e0f7fa',bg2:'#b2ebf2',pe:['🌊','·','~','∿'],title:'#006064',cat:'#00838f',head:'#00e5ff',body:['#00838f','#006064','#003d40'],lNB:'#00838f',lNT:'#006064',lOB:'#b2ebf2',lOT:'#26c6da',wCol:'#006064',msgBg:'rgba(224,247,250,.95)',msgBorder:'#00838f',msgText:'#006064',hbBg:'#e0f7fa',hbBorder:'#00838f',hbText:'#006064',tongue:'#b71c1c'},
+};
+
+const WORDS=[
+  // Тварини — від простих до складних
+  {w:'КІТ',   cat:'Тварини',e:'🐱'},{w:'ПЕС',   cat:'Тварини',e:'🐶'},
+  {w:'КІТ',   cat:'Тварини',e:'🐱'},{w:'ВІЛ',   cat:'Тварини',e:'🐂'},
+  {w:'РАК',   cat:'Тварини',e:'🦀'},{w:'ВОВ',   cat:'Тварини',e:'🐺'},
+  {w:'КІТ',   cat:'Тварини',e:'🐱'},{w:'ЖАБА',  cat:'Тварини',e:'🐸'},
+  {w:'ВОВК',  cat:'Тварини',e:'🐺'},{w:'КІНЬ',  cat:'Тварини',e:'🐴'},
+  {w:'КІШКА', cat:'Тварини',e:'🐱'},{w:'ЇЖАК',  cat:'Тварини',e:'🦔'},
+  {w:'СВИНЯ', cat:'Тварини',e:'🐷'},{w:'МИШКА', cat:'Тварини',e:'🐭'},
+  {w:'БІЛКА', cat:'Тварини',e:'🐿️'},{w:'КОРОВА',cat:'Тварини',e:'🐮'},
+  {w:'ЗАЄЦЬ', cat:'Тварини',e:'🐰'},{w:'ЛИСИЦЯ',cat:'Тварини',e:'🦊'},
+  {w:'ВЕДМІДЬ',cat:'Тварини',e:'🐻'},{w:'ЧЕРЕПАХА',cat:'Тварини',e:'🐢'},
+  // Природа
+  {w:'МАК',   cat:'Природа',e:'🌸'},{w:'ДУБ',   cat:'Природа',e:'🌳'},
+  {w:'ЛІС',   cat:'Природа',e:'🌲'},{w:'ДОЩ',   cat:'Природа',e:'🌧️'},
+  {w:'СНІГ',  cat:'Природа',e:'❄️'},{w:'МОРЕ',  cat:'Природа',e:'🌊'},
+  {w:'ГОРА',  cat:'Природа',e:'⛰️'},{w:'РІЧКА', cat:'Природа',e:'🏞️'},
+  {w:'СОНЦЕ', cat:'Природа',e:'☀️'},{w:'ХМАРА', cat:'Природа',e:'☁️'},
+  {w:'КВІТКА',cat:'Природа',e:'🌸'},{w:'ВЕСЕЛКА',cat:'Природа',e:'🌈'},
+  // Фрукти
+  {w:'ДИМ',   cat:'Фрукти',e:'🍈'},
+  {w:'ДИНЯ',  cat:'Фрукти',e:'🍈'},{w:'ГРУША',  cat:'Фрукти',e:'🍐'},
+  {w:'КАВУН', cat:'Фрукти',e:'🍉'},{w:'СЛИВА',  cat:'Фрукти',e:'🫐'},
+  {w:'ВИШНЯ', cat:'Фрукти',e:'🍒'},{w:'БАНАН',  cat:'Фрукти',e:'🍌'},
+  {w:'ЛИМОН', cat:'Фрукти',e:'🍋'},{w:'ПЕРСИК', cat:'Фрукти',e:'🍑'},
+  {w:'ЯБЛУКО',cat:'Фрукти',e:'🍎'},{w:'ПОЛУНИЦЯ',cat:'Фрукти',e:'🍓'},
+  {w:'АПЕЛЬСИН',cat:'Фрукти',e:'🍊'},{w:'ВИНОГРАД',cat:'Фрукти',e:'🍇'},
+  // Овочі
+  {w:'БУК',   cat:'Овочі',e:'🥬'},
+  {w:'БУРЯК', cat:'Овочі',e:'🫚'},{w:'МОРКВА', cat:'Овочі',e:'🥕'},
+  {w:'ЧАСНИК',cat:'Овочі',e:'🧄'},{w:'ОГІРОК', cat:'Овочі',e:'🥒'},
+  {w:'ПЕРЕЦЬ',cat:'Овочі',e:'🫑'},{w:'ГАРБУЗ', cat:'Овочі',e:'🎃'},
+  {w:'ЦИБУЛЯ',cat:'Овочі',e:'🧅'},{w:'КАПУСТА',cat:'Овочі',e:'🥬'},
+  {w:'ПОМІДОР',cat:'Овочі',e:'🍅'},{w:'КАРТОПЛЯ',cat:'Овочі',e:'🥔'},
+  // Побут
+  {w:'ДІМ',   cat:'Побут',e:'🏠'},{w:'СІМ',   cat:'Побут',e:'🏠'},
+  {w:'ЛІЖКО', cat:'Побут',e:'🛏️'},{w:'ЛАМПА',  cat:'Побут',e:'💡'},
+  {w:'ЛОЖКА', cat:'Побут',e:'🥄'},{w:'КНИГА',  cat:'Побут',e:'📚'},
+  {w:'ЧАЙНИК',cat:'Побут',e:'🫖'},{w:'СКЛЯНКА',cat:'Побут',e:'🥛'},
+  {w:'ТАРІЛКА',cat:'Побут',e:'🍽️'},{w:'СТІЛЕЦЬ',cat:'Побут',e:'🪑'},
+  {w:'ОЛІВЕЦЬ',cat:'Побут',e:'✏️'},{w:'НОЖИЦІ', cat:'Побут',e:'✂️'},
+  {w:'ДЗЕРКАЛО',cat:'Побут',e:'🪞'},{w:'ГОДИННИК',cat:'Побут',e:'⏰'},
+  // Птахи
+  {w:'СОЯ',   cat:'Птахи',e:'🦉'},
+  {w:'СОВА',  cat:'Птахи',e:'🦉'},{w:'ОРЕЛ',   cat:'Птахи',e:'🦅'},
+  {w:'КАЧКА', cat:'Птахи',e:'🦆'},{w:'КУРКА',  cat:'Птахи',e:'🐔'},
+  {w:'ПАПУГА',cat:'Птахи',e:'🦜'},{w:'ЛЕЛЕКА', cat:'Птахи',e:'🦢'},
+  {w:'ПІНГВІН',cat:'Птахи',e:'🐧'},{w:'ВОРОНА',cat:'Птахи',e:'🐦‍⬛'},
+  {w:'ГОРОБЕЦЬ',cat:'Птахи',e:'🐦'},
+].filter((w,i,a)=>
+  /^[А-ЯЄІЇҐа-яєіїґ]{3,}$/.test(w.w) &&
+  !['ДИМ','БУК','СОЯ','СІМ','ДІМ','ВОВ','РАК'].includes(w.w) &&
+  a.findIndex(x=>x.w===w.w)===i
+); // прибираємо двобуквенні заготовки
+
+const PRAISE=['Молодець! 🌟','Чудово! 🎉','Супер! 🚀','Браво! 🏆','Ти розумник! ⭐','Відмінно! 💪','Клас! 🎊'];
+
+// --- particles ---
+let particles=[];
+function initParticles(t){
+  particles=[];
+  for(let i=0;i<34;i++)particles.push({
+    x:Math.random()*400,y:Math.random()*400,
+    vx:(Math.random()-.5)*.3,vy:(Math.random()-.5)*.3,
+    size:7+Math.random()*12,ch:t.pe[Math.floor(Math.random()*t.pe.length)],
+    alpha:.14+Math.random()*.2,rot:Math.random()*Math.PI*2,vrot:(Math.random()-.5)*.01
+  });
+}
+let bgAnim;
+function startBg(t){
+  cancelAnimationFrame(bgAnim);
+  (function fr(){
+    bgX.clearRect(0,0,400,400);
+    const g=bgX.createLinearGradient(0,0,400,400);
+    g.addColorStop(0,t.bg1);g.addColorStop(1,t.bg2);
+    bgX.fillStyle=g;bgX.fillRect(0,0,400,400);
+    particles.forEach(p=>{
+      p.x+=p.vx;p.y+=p.vy;p.rot+=p.vrot;
+      if(p.x<-20)p.x=420;if(p.x>420)p.x=-20;
+      if(p.y<-20)p.y=420;if(p.y>420)p.y=-20;
+      bgX.save();bgX.globalAlpha=p.alpha;
+      bgX.font=`${p.size}px sans-serif`;
+      bgX.textAlign='center';bgX.textBaseline='middle';
+      bgX.translate(p.x,p.y);bgX.rotate(p.rot);
+      bgX.fillText(p.ch,0,0);bgX.restore();
+    });
+    bgAnim=requestAnimationFrame(fr);
+  })();
+}
+
+// --- speech ---
+function speakWord(word,onDone){
+  if(!window.speechSynthesis){onDone&&onDone();return;}
+  speechSynthesis.cancel();
+  const lh=document.getElementById('letter-highlight');
+  const ws=document.getElementById('word-spoken');
+  const lts=[...word];let i=0;
+  lh.textContent='';ws.textContent='';ws.classList.remove('show');
+  function next(){
+    if(i<lts.length){
+      lh.textContent=lts[i];
+      const u=new SpeechSynthesisUtterance(lts[i]);
+      u.lang='uk-UA';u.rate=.75;u.pitch=1.2;
+      u.onend=()=>{i++;setTimeout(next,200);};
+      speechSynthesis.speak(u);
+    } else {
+      lh.textContent='';
+      setTimeout(()=>{
+        ws.textContent=word;ws.classList.add('show');
+        const u=new SpeechSynthesisUtterance(word);
+        u.lang='uk-UA';u.rate=.7;u.pitch=1;
+        u.onend=()=>setTimeout(()=>{onDone&&onDone();},500);
+        speechSynthesis.speak(u);
+      },250);
+    }
+  }
+  setTimeout(next,400);
+}
+
+// error sound
+function buzzSound(){
+  try{
+    const ac=new(window.AudioContext||window.webkitAudioContext)();
+    const o=ac.createOscillator(),g=ac.createGain();
+    o.connect(g);g.connect(ac.destination);
+    o.type='square';o.frequency.setValueAtTime(120,ac.currentTime);
+    g.gain.setValueAtTime(.18,ac.currentTime);
+    g.gain.exponentialRampToValueAtTime(.001,ac.currentTime+.3);
+    o.start();o.stop(ac.currentTime+.3);
+  }catch(e){}
+}
+
+// --- leaderboard ---
+const LB_KEY='snakeReadLB_v2';
+function loadLb(){try{return JSON.parse(localStorage.getItem(LB_KEY)||'[]');}catch{return[];}}
+function saveLb(d){try{localStorage.setItem(LB_KEY,JSON.stringify(d));}catch{}}
+function addLbEntry(score,level){
+  const d=loadLb();
+  d.push({score,level,date:new Date().toLocaleDateString('uk-UA')});
+  d.sort((a,b)=>b.score-a.score);
+  saveLb(d.slice(0,10));renderLb();
+}
+function clearLb(){if(confirm('Очистити таблицю?')){saveLb([]);renderLb();}}
+const MEDALS=['🥇','🥈','🥉'];
+function renderLb(){
+  const d=loadLb();
+  const ul=document.getElementById('lb-list');
+  if(!d.length){ul.innerHTML='<li style="color:#aaa;justify-content:center;font-size:12px;padding:8px">Поки немає результатів</li>';return;}
+  ul.innerHTML=d.map((e,i)=>`<li><span class="medal">${MEDALS[i]||`${i+1}.`}</span><span class="lb-name">${e.date}</span><span class="lb-score">${e.score}⭐</span><span class="lb-lvl">рів.${e.level}</span></li>`).join('');
+  if(th){document.getElementById('lb-panel').style.background=th.hbBg;document.getElementById('lb-header').style.color=th.hbText;}
+}
+function toggleLb(){
+  const b=document.getElementById('lb-body'),a=document.getElementById('lb-arrow');
+  b.classList.toggle('open');a.textContent=b.classList.contains('open')?'▲':'▼';
+  if(b.classList.contains('open'))renderLb();
+}
+
+// --- game state ---
+let snake,dir,nextDir,letters,wordIdx,word,wordEmoji,cat,th;
+let score,best=0,level,gameLoop,paused=false,alive=false,frozen=false;
+let usedWords=[];
+
+function rnd(n){return Math.floor(Math.random()*n);}
+function getSpeed(){return Math.max(160,380-level*20);}
+
+function applyTheme(t){
+  th=t;
+  document.body.style.background=`linear-gradient(135deg,${t.bg1},${t.bg2})`;
+  document.getElementById('title').style.color=t.title;
+  document.getElementById('info').style.color=t.cat;
+  const hb=document.getElementById('hint-box');
+  hb.style.background=t.hbBg;hb.style.borderColor=t.hbBorder;hb.style.color=t.hbText;
+  document.getElementById('word-spoken').style.color=t.wCol;
+  document.getElementById('letter-highlight').style.color=t.head;
+  document.getElementById('praise').style.color=t.hbText;
+  document.getElementById('lb-panel').style.background=t.hbBg;
+  document.getElementById('lb-header').style.color=t.hbText;
+  document.querySelectorAll('#dpad button').forEach(b=>{b.style.borderColor=t.head;b.style.color=t.title;});
+}
+
+function getWord(){
+  // pick random from all words, avoid repeats until exhausted
+  let pool=WORDS.filter(w=>!usedWords.includes(w.w));
+  if(!pool.length){usedWords=[];pool=WORDS;}
+  const wObj=pool[rnd(pool.length)];
+  usedWords.push(wObj.w);
+  return wObj;
+}
+
+function updateHintBox(){
+  document.getElementById('hint-emoji').textContent=wordEmoji;
+  document.getElementById('hint-cat').textContent=cat;
+  document.getElementById('hint-word-label').textContent='Збери слово по буквах!';
+}
+
+function initLevel(){
+  const wObj=getWord();
+  word=wObj.w;cat=wObj.cat;wordEmoji=wObj.e;
+  th=THEMES[cat]||THEMES['Овочі'];
+  applyTheme(th);initParticles(th);startBg(th);
+  updateHintBox();
+  wordIdx=0;renderWordDisplay();
+  snake=[{x:10,y:10},{x:9,y:10},{x:8,y:10}];
+  dir={x:1,y:0};nextDir={x:1,y:0};
+  frozen=false;
+  placeLetters();draw();
+}
+
+function placeLetters(){
+  letters=[];
+  const needed=word.split('');
+  const extra='АБВГДЕЄЖЗИІЇЙКЛМНОПРСТУФХЦЧШЩЬЮЯ'.split('').filter(c=>!needed.includes(c));
+  const all=[...needed];
+  for(let i=0;i<Math.min(6,extra.length);i++)all.push(extra[rnd(extra.length)]);
+  const used=new Set(snake.map(s=>`${s.x},${s.y}`));
+  const pos=[];
+  while(pos.length<all.length){
+    const p={x:2+rnd(COLS-4),y:2+rnd(ROWS-4)};
+    const k=`${p.x},${p.y}`;
+    if(!used.has(k)){used.add(k);pos.push(p);}
+  }
+  for(let i=0;i<all.length;i++)letters.push({x:pos[i].x,y:pos[i].y,ch:all[i]});
+}
+
+function renderWordDisplay(){
+  const d=document.getElementById('word-display');
+  d.innerHTML=word.split('').map((ch,i)=>{
+    const ok=i<wordIdx,isNext=i===wordIdx;
+    let st=ok?`color:${th.wCol};border-color:${th.wCol}`:(isNext?`color:${th.lNT};border-color:${th.lNB}`:'color:#bbb;border-color:#ddd');
+    return `<span class="${ok?'collected':''} ${isNext?'next-hint':''}" style="${st}">${ch}</span>`;
+  }).join('');
+}
+
+function startGame(){
+  score=0;level=1;alive=true;paused=false;frozen=false;usedWords=[];
+  document.getElementById('score').textContent=0;
+  document.getElementById('lvl').textContent=1;
+  hideMsg();hideCelebrate();clearInterval(gameLoop);
+  initLevel();
+  gameLoop=setInterval(tick,getSpeed());
+}
+
+function togglePause(){
+  if(!alive)return;
+  paused=!paused;
+  if(!paused){clearInterval(gameLoop);gameLoop=setInterval(tick,getSpeed());hideMsg();}
+  else showMsg('Пауза ⏸\nПродовжити → «Пауза»');
+}
+
+function e2d(ev,x,y){ev.preventDefault();dpad(x,y);}
+function dpad(x,y){if(!alive||paused||frozen)return;const nd={x,y};if(dir&&(nd.x!==-dir.x||nd.y!==-dir.y))nextDir=nd;}
+
+function freezeSnake(){
+  frozen=true;
+  buzzSound();
+  const ff=document.getElementById('freeze-flash');
+  ff.classList.add('active');
+  const gw=document.getElementById('gwrap');
+  gw.classList.add('shake');
+  setTimeout(()=>{ff.classList.remove('active');gw.classList.remove('shake');},350);
+  setTimeout(()=>{frozen=false;},1000);
+}
+
+function tick(){
+  if(paused||!alive||frozen)return;
+  dir=nextDir;
+  const head={x:snake[0].x+dir.x,y:snake[0].y+dir.y};
+  if(head.x<0||head.x>=COLS||head.y<0||head.y>=ROWS){gameOver();return;}
+  if(snake.some(s=>s.x===head.x&&s.y===head.y)){gameOver();return;}
+  snake.unshift(head);
+  let ate=false;
+  for(let i=0;i<letters.length;i++){
+    const l=letters[i];
+    if(l.x===head.x&&l.y===head.y){
+      if(l.ch===word[wordIdx]){
+        wordIdx++;score+=10*level;
+        document.getElementById('score').textContent=score;
+        renderWordDisplay();letters.splice(i,1);ate=true;
+        if(wordIdx===word.length){
+          clearInterval(gameLoop);
+          level++;score+=50;
+          document.getElementById('score').textContent=score;
+          document.getElementById('lvl').textContent=level;
+          if(score>best){best=score;document.getElementById('best').textContent=best;}
+          showCelebrate();return;
+        }
+      } else {
+        score=Math.max(0,score-3);
+        document.getElementById('score').textContent=score;
+        letters.splice(i,1);ate=true;
+        freezeSnake();
+      }
+      break;
+    }
+  }
+  if(!ate)snake.pop();
+  if(letters.length<word.length-wordIdx+3)addExtraLetter();
+  draw();
+}
+
+function addExtraLetter(){
+  const used=new Set(snake.map(s=>`${s.x},${s.y}`).concat(letters.map(l=>`${l.x},${l.y}`)));
+  let p;
+  do{p={x:2+rnd(COLS-4),y:2+rnd(ROWS-4)};}while(used.has(`${p.x},${p.y}`));
+  const rem=word.slice(wordIdx);
+  letters.push({x:p.x,y:p.y,ch:rem[rnd(rem.length)]});
+}
+
+function gameOver(){
+  alive=false;clearInterval(gameLoop);
+  addLbEntry(score,level);
+  if(score>best){best=score;document.getElementById('best').textContent=best;}
+  showMsg(`Гра закінчена! 😢\nЗібрано ⭐ ${score}\nНатисни «Нова гра»`);
+  draw();
+  const b=document.getElementById('lb-body'),a=document.getElementById('lb-arrow');
+  b.classList.add('open');a.textContent='▲';renderLb();
+}
+
+function showCelebrate(){
+  const cel=document.getElementById('celebrate');
+  const eb=document.getElementById('emoji-big');
+  const pr=document.getElementById('praise');
+  const ws=document.getElementById('word-spoken');
+  const lh=document.getElementById('letter-highlight');
+  eb.textContent=wordEmoji;
+  pr.textContent=PRAISE[rnd(PRAISE.length)];
+  ws.textContent='';ws.classList.remove('show');lh.textContent='';pr.classList.remove('show');
+  cel.style.background=th.msgBg;cel.classList.add('show');
+  setTimeout(()=>{eb.classList.add('pop');},50);
+  setTimeout(()=>{pr.classList.add('show');},400);
+  speakWord(word,()=>{
+    setTimeout(()=>{hideCelebrate();initLevel();gameLoop=setInterval(tick,getSpeed());},700);
+  });
+}
+function hideCelebrate(){
+  const cel=document.getElementById('celebrate');
+  cel.classList.remove('show');
+  document.getElementById('emoji-big').classList.remove('pop');
+  document.getElementById('word-spoken').classList.remove('show');
+  document.getElementById('praise').classList.remove('show');
+}
+
+function draw(){
+  if(!th)return;
+  ctx.clearRect(0,0,400,400);
+  // letters — bigger font for kids
+  letters.forEach(l=>{
+    const isNext=l.ch===word[wordIdx];
+    if(isNext){ctx.shadowColor=th.lNB;ctx.shadowBlur=12;}
+    ctx.fillStyle=isNext?'#ffffff':'#f8f8f8';
+    ctx.strokeStyle=isNext?th.lNB:th.lOB;ctx.lineWidth=isNext?2.5:1.5;
+    ctx.beginPath();ctx.roundRect(l.x*CELL,l.y*CELL,CELL,CELL,5);
+    ctx.fill();ctx.stroke();ctx.shadowBlur=0;
+    ctx.fillStyle=isNext?th.lNT:th.lOT;
+    ctx.font=`bold ${CELL-3}px sans-serif`;
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(l.ch,l.x*CELL+CELL/2,l.y*CELL+CELL/2+1);
+  });
+  // snake
+  snake.forEach((s,i)=>{
+    if(i===0){ctx.shadowColor=th.head;ctx.shadowBlur=14;ctx.fillStyle=th.head;}
+    else{ctx.shadowBlur=0;const idx=Math.min(2,Math.floor(i/Math.max(1,snake.length/3)));ctx.fillStyle=th.body[idx];}
+    ctx.beginPath();ctx.roundRect(s.x*CELL+1,s.y*CELL+1,CELL-2,CELL-2,i===0?6:3);
+    ctx.fill();ctx.shadowBlur=0;
+    if(i===0){
+      const ex=dir.x,ey=dir.y,ox=ey*3,oy=ex*3;
+      ctx.fillStyle='#fff';
+      ctx.beginPath();ctx.arc(s.x*CELL+CELL/2+ex*4+ox,s.y*CELL+CELL/2+ey*4+oy,3,0,Math.PI*2);ctx.fill();
+      ctx.beginPath();ctx.arc(s.x*CELL+CELL/2+ex*4-ox,s.y*CELL+CELL/2+ey*4-oy,3,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle='#222';
+      ctx.beginPath();ctx.arc(s.x*CELL+CELL/2+ex*4+ox,s.y*CELL+CELL/2+ey*4+oy,1.5,0,Math.PI*2);ctx.fill();
+      ctx.beginPath();ctx.arc(s.x*CELL+CELL/2+ex*4-ox,s.y*CELL+CELL/2+ey*4-oy,1.5,0,Math.PI*2);ctx.fill();
+      const tx=s.x*CELL+CELL/2+ex*10,ty=s.y*CELL+CELL/2+ey*10;
+      ctx.strokeStyle=th.tongue;ctx.lineWidth=1.5;
+      ctx.beginPath();
+      ctx.moveTo(s.x*CELL+CELL/2+ex*8,s.y*CELL+CELL/2+ey*8);
+      ctx.lineTo(tx,ty);ctx.lineTo(tx+ey*3+ex*2,ty+ex*3+ey*2);
+      ctx.moveTo(tx,ty);ctx.lineTo(tx-ey*3+ex*2,ty-ex*3+ey*2);
+      ctx.stroke();
+    }
+  });
+}
+
+function showMsg(t){const m=document.getElementById('msg');if(th){m.style.background=th.msgBg;m.style.borderColor=th.msgBorder;m.style.color=th.msgText;}m.innerHTML=t.replace(/\n/g,'<br>');m.classList.add('show');}
+function hideMsg(){document.getElementById('msg').classList.remove('show');}
+
+document.addEventListener('keydown',e=>{
+  const map={ArrowUp:{x:0,y:-1},ArrowDown:{x:0,y:1},ArrowLeft:{x:-1,y:0},ArrowRight:{x:1,y:0}};
+  if(map[e.key]){e.preventDefault();if(!frozen)dpad(map[e.key].x,map[e.key].y);}
+});
+
+// init
+th=THEMES['Овочі'];applyTheme(th);initParticles(th);startBg(th);renderLb();
+setTimeout(()=>{
+  ctx.fillStyle=th.title;ctx.font='bold 17px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText('Натисни «Нова гра» 🐍',200,200);
+},80);
+</script>
+</body>
+</html>
